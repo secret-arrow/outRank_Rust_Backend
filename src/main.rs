@@ -66,10 +66,16 @@ async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder 
     HttpResponse::Ok().json(response)
 }
 
-#[get("/get_rarity_score")]
-async fn get_rarity_score(query_params: web::Query<MyQueryParams>) -> impl Responder {
-    let canister_id = &query_params.canister_id;
-    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+async fn get_rarity_score(data: String) -> HttpResponse {
+    let canister_id = data;
+    let trait_object_array;
+    let trait_array;
+    if canister_id.clone().chars().next().unwrap() == '[' {
+        (trait_object_array, trait_array) = fetch_personal_data(canister_id.to_owned());
+    }
+    else {
+        (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    }
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
     let rarity_mat = rare_calc(traits_freq.clone());
@@ -78,10 +84,16 @@ async fn get_rarity_score(query_params: web::Query<MyQueryParams>) -> impl Respo
     HttpResponse::Ok().json(rarity_score)
 }
 
-#[get("/get_rarity_rank")]
-async fn get_rarity_rank(query_params: web::Query<MyQueryParams>) -> impl Responder {
-    let canister_id = &query_params.canister_id;
-    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+async fn get_rarity_rank(data: String) -> HttpResponse {
+    let canister_id = data;
+    let trait_object_array;
+    let trait_array;
+    if canister_id.clone().chars().next().unwrap() == '[' {
+        (trait_object_array, trait_array) = fetch_personal_data(canister_id.to_owned());
+    }
+    else {
+        (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    }
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     let (_, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value));
     let rarity_mat = rare_calc(traits_freq);
@@ -89,28 +101,49 @@ async fn get_rarity_rank(query_params: web::Query<MyQueryParams>) -> impl Respon
     let rarity_rank = rare_rank(rarity_score);
     HttpResponse::Ok().json(rarity_rank)
 }
-#[get("/get_trait_independence")]
-async fn get_trait_independence(query_params: web::Query<MyQueryParams>) -> impl Responder {
-    let canister_id = &query_params.canister_id;
-    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+
+async fn get_trait_independence(data: String) -> HttpResponse {
+    let canister_id = data;
+    let trait_object_array;
+    let trait_array;
+    if canister_id.clone().chars().next().unwrap() == '[' {
+        (trait_object_array, trait_array) = fetch_personal_data(canister_id.to_owned());
+    }
+    else {
+        (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    }
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     let (_, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value));
     let trait_independence = trait_independence(traits_freq);
     HttpResponse::Ok().json(trait_independence)
 }
-#[get("/get_trait_cramersv")]
-async fn get_trait_cramersv(query_params: web::Query<MyQueryParams>) -> impl Responder {
-    let canister_id = &query_params.canister_id;
-    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+
+async fn get_trait_cramersv(data: String) -> HttpResponse {
+    let canister_id = data;
+    let trait_object_array;
+    let trait_array;
+    if canister_id.clone().chars().next().unwrap() == '[' {
+        (trait_object_array, trait_array) = fetch_personal_data(canister_id.to_owned());
+    }
+    else {
+        (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    }
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
     let trait_cramers_v = trait_cramers_v(traits_freq.clone());
     HttpResponse::Ok().json(trait_cramers_v)
 }
-#[get("/get_trait_normalize")]
-async fn get_trait_normalize(query_params: web::Query<MyQueryParams>) -> impl Responder {
-    let canister_id = &query_params.canister_id;
-    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+
+async fn get_trait_normalize(data: String) -> HttpResponse {
+    let canister_id = data;
+    let trait_object_array;
+    let trait_array;
+    if canister_id.clone().chars().next().unwrap() == '[' {
+        (trait_object_array, trait_array) = fetch_personal_data(canister_id.to_owned());
+    }
+    else {
+        (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    }
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     println!("traits_value");
     let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
@@ -130,26 +163,22 @@ async fn main() -> std::io::Result<()> {
                     .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
                     .max_age(3600),
             )
-            .service(my_endpoint)
-            .service(get_rarity_score)
-            .service(get_rarity_rank)
-            .service(get_trait_independence)
-            .service(get_trait_cramersv)
-            .service(get_trait_normalize)
+            .route("/get_rarity_score", web::post().to(get_rarity_score))
+            .route("/get_rarity_rank", web::post().to(get_rarity_rank))
+            .route("/get_trait_independence", web::post().to(get_trait_independence))
+            .route("/get_trait_cramersv", web::post().to(get_trait_cramersv))
+            .route("/get_trait_normalize", web::post().to(get_trait_normalize))
     })
     .bind("127.0.0.1:8000")?
     .run()
     .await
 }
 
-fn fetch_test_data() -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
+fn fetch_personal_data(input: String) -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
     let mut trait_object_array: Vec<std::collections::HashMap<String, String>> = Vec::new();
     let mut trait_array: Vec<String> = Vec::new();
 
-    let test_data_string = fs::read_to_string("testdata.txt").unwrap();
-
-    let string_data = test_data_string.replace("\"", "");
-    let mut data = string_data.as_str();
+    let mut data = input.as_str();
 
     while 1 == 1 {
         let start = data.find("{").unwrap_or(0);
@@ -193,7 +222,8 @@ fn fetch_test_data() -> (Vec<std::collections::HashMap<String, String>> , Vec<St
         }
         trait_object_array.push(my_object);
     }
-
+    println!("{:#?}", trait_object_array);
+    println!("{:#?}", trait_array);
     (trait_object_array, trait_array)
 }
 
