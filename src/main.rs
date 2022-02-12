@@ -66,6 +66,58 @@ async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder 
     HttpResponse::Ok().json(response)
 }
 
+#[get("/get_rarity_score")]
+async fn get_rarity_score(query_params: web::Query<MyQueryParams>) -> impl Responder {
+    let canister_id = &query_params.canister_id;
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
+    let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
+    let rarity_mat = rare_calc(traits_freq.clone());
+    let mut rarity_score = score_calc(rarity_mat);
+    rarity_score = add_max_min_minus_to_rarity_score(rarity_score);
+    HttpResponse::Ok().json(rarity_score)
+}
+
+#[get("/get_rarity_rank")]
+async fn get_rarity_rank(query_params: web::Query<MyQueryParams>) -> impl Responder {
+    let canister_id = &query_params.canister_id;
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
+    let (_, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value));
+    let rarity_mat = rare_calc(traits_freq);
+    let mut rarity_score = score_calc(rarity_mat);
+    let rarity_rank = rare_rank(rarity_score);
+    HttpResponse::Ok().json(rarity_rank)
+}
+#[get("/get_trait_independence")]
+async fn get_trait_independence(query_params: web::Query<MyQueryParams>) -> impl Responder {
+    let canister_id = &query_params.canister_id;
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
+    let (_, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value));
+    let trait_independence = trait_independence(traits_freq);
+    HttpResponse::Ok().json(trait_independence)
+}
+#[get("/get_trait_cramersv")]
+async fn get_trait_cramersv(query_params: web::Query<MyQueryParams>) -> impl Responder {
+    let canister_id = &query_params.canister_id;
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
+    let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
+    let trait_cramers_v = trait_cramers_v(traits_freq.clone());
+    HttpResponse::Ok().json(trait_cramers_v)
+}
+#[get("/get_trait_normalize")]
+async fn get_trait_normalize(query_params: web::Query<MyQueryParams>) -> impl Responder {
+    let canister_id = &query_params.canister_id;
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
+    println!("traits_value");
+    let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
+    let trait_normalize = trait_normalize(reverse_mat(traits_value), traits_count, traits_freq);
+    HttpResponse::Ok().json(trait_normalize)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
@@ -79,6 +131,11 @@ async fn main() -> std::io::Result<()> {
                     .max_age(3600),
             )
             .service(my_endpoint)
+            .service(get_rarity_score)
+            .service(get_rarity_rank)
+            .service(get_trait_independence)
+            .service(get_trait_cramersv)
+            .service(get_trait_normalize)
     })
     .bind("127.0.0.1:8000")?
     .run()
