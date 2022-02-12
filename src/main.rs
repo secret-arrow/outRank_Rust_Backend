@@ -26,14 +26,8 @@ struct MyResponse {
     trait_array: Vec<String>
 }
 
-#[derive(Deserialize)]
-struct MyQueryParams {
-    canister_id: String
-}
-
-#[get("/get_canister_data")]
-async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder {
-    let canister_id = &query_params.canister_id;
+async fn my_endpoint(data: String) -> HttpResponse {
+    let canister_id = data;
     let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
     // let (trait_object_array, trait_array) = fetch_test_data();
     println!("fetch data");
@@ -163,6 +157,7 @@ async fn main() -> std::io::Result<()> {
                     .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
                     .max_age(3600),
             )
+            .route("/get_canister_data", web::post().to(my_endpoint))
             .route("/get_rarity_score", web::post().to(get_rarity_score))
             .route("/get_rarity_rank", web::post().to(get_rarity_rank))
             .route("/get_trait_independence", web::post().to(get_trait_independence))
