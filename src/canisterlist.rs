@@ -1,6 +1,5 @@
 pub fn get_canister_list() -> Vec<String> {
     let canisterlist = vec![
-        String::from("gappj-raaaa-aaaap-aakoa-cai"),
         String::from("Xizxk-fqaaa-aaaap-aa2nq-cai"),
         String::from("vsf7w-3aaaa-aaaap-aa2cq-cai"),
         String::from("cr2rc-vaaaa-aaaap-aakwa-cai"),
