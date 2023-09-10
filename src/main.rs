@@ -3,9 +3,9 @@ extern crate candid;
 use serde::Deserialize;
 use serde_json;
 use serde_json::to_string_pretty;
-use std::ops::Index;
 use std::process::Command;
-use std::hash::{Hash, Hasher};
+use statrs::distribution::ChiSquared;
+use statrs::distribution::ContinuousCDF;
 
 #[derive(Debug, Deserialize)]
 struct TraitType {
@@ -17,11 +17,13 @@ fn main() {
     let (trait_object_array, trait_array) = fetch_canister_data("Ktlvk-giaaa-aaaap-aayja-cai".to_string());
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value));
-    let rarity_mat = rare_calc(traits_freq);
-    let mut rarity_score = score_calc(rarity_mat);
-    let mut rarity_rank = rare_rank(rarity_score.clone());
-    rarity_score = add_max_min_minus_to_rarity_score(rarity_score); 
-    println!("{:#?}",rarity_score);
+    // let rarity_mat = rare_calc(traits_freq.clone());
+    // let mut rarity_score = score_calc(rarity_mat);
+    // let rarity_rank = rare_rank(rarity_score.clone());
+    // rarity_score = add_max_min_minus_to_rarity_score(rarity_score); 
+    // let trait_independence = trait_independence(traits_freq);
+    let trait_cramersV = trait_cramers_v(traits_freq);
+    println!("{:#?}", trait_cramersV);
 }
 
 fn fetch_canister_data(input: String) -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
@@ -47,7 +49,6 @@ fn fetch_canister_data(input: String) -> (Vec<std::collections::HashMap<String, 
         let mut index = data.find("record { 0 :").unwrap_or(0);
         (_, data) = data.split_at(index);
         let mut pointer = 1;
-        let mut cnt = 0;
         while 1 == 1 {
             if pointer < 1000 {
                 index = data
@@ -90,7 +91,6 @@ fn fetch_canister_data(input: String) -> (Vec<std::collections::HashMap<String, 
                 my_object.insert(key.clone(), item.value);
             }
             trait_object_array.push(my_object);
-            cnt += 1;
             if index == 0 {
                 break;
             }
@@ -267,37 +267,91 @@ fn add_max_min_minus_to_rarity_score(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
     output
 }
 
-// fn trait_independence(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
-//     let mut output: Vec<Vec<f64>> = Vec::new();
-//     let out_array: Vec<i32> = (0 as i32 ..=input.len() as i32 - 2 as i32).collect();
-//     let in_array: Vec<i32> = (1 as i32 ..=input.len() as i32 - 1 as i32).collect();
-//     for out_val in out_array {
-//         for in_val in in_array {
-//         }
-//     }
-//     output
-// }
+fn trait_independence(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
+    let mut output: Vec<Vec<f64>> = vec![vec![0.0; input.len()]; input.len()];
+    for out_val in 0 ..=input.len() -2 {
+        for in_val in out_val+1 ..=input.len() -1 {
+            let key_set= independent_test(input[out_val].clone(), input[in_val].clone());
+            let (chi2, dof) = calculate_chi2_dof(key_set);
+            let chi_squared = ChiSquared::new(dof as f64).unwrap();
+            let critical_value = chi_squared.inverse_cdf(0.95);
+            output[in_val][out_val] = format!("{:.1$}", chi2, 4).parse::<f64>().unwrap();
+            output[out_val][in_val] = format!("{:.1$}", critical_value, 4).parse::<f64>().unwrap();
+        }
+    }
+    output
+}
 
-// fn trait_cramers_v(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
-//     let mut output: Vec<Vec<f64>> = Vec::new();
-//     output
-// }
+fn trait_cramers_v(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
+    let mut output: Vec<Vec<f64>> = vec![vec![0.0; input.len()]; input.len()];
+    for out_val in 0 ..=input.len() -2 {
+        for in_val in out_val+1 ..=input.len() -1 {
+            let key_set= independent_test(input[out_val].clone(), input[in_val].clone());
+            let (chi2, _) = calculate_chi2_dof(key_set.clone());
+            let mut sum = 0.0;
+            for col in key_set.clone() {
+                for item in col {
+                    sum += item;
+                }
+            }
+            let mut dimension = 0.0; 
+            if key_set.len() > key_set[0].len() {
+                dimension = key_set[0].len() as f64 - 1.0;
+            }
+            else{
+                dimension = key_set.len() as f64 - 1.0;
+            }
+            let sqrt = ((chi2/sum)/dimension).sqrt();
+            output[in_val][out_val] = format!("{:.1$}", sqrt, 4).parse::<f64>().unwrap();
+        }
+    }
+    output
+}
 
-fn independent_test(first: Vec<f64>, second: Vec<f64>) -> f64 {
-    let mut output = 0.0 as f64;
+fn independent_test(first: Vec<f64>, second: Vec<f64>) -> Vec<Vec<f64>> {
     let first_unique_array: Vec<f64> = get_unique_array(first.clone());
     let second_unique_array: Vec<f64> = get_unique_array(second.clone());
-    let mut key_set:Vec<Vec<i32>> = vec![vec![0; first_unique_array.len()]; second_unique_array.len()];
-    for index in 0..first.len()-1 {
+    let mut key_set:Vec<Vec<f64>> = vec![vec![0.0; first_unique_array.len()]; second_unique_array.len()];
+    for index in 0..first.len() {
         if let Some(col)= second_unique_array.iter().position(|&x| x == second[index]) {
             if let Some(row)= first_unique_array.iter().position(|&x| x == first[index]) {
-                key_set[col][row] += 1;
+                key_set[col][row] += 1.0;
             }
         }
     }
-    // calulate chi2_contingency
-    
-    output
+    key_set
+}
+
+fn calculate_chi2_dof(input: Vec<Vec<f64>>) -> (f64, usize) {
+    let row_totals: Vec<f64> = input.iter().map(|row| row.iter().sum()).collect();
+    let column_totals: Vec<f64> = (0..input[0].len())
+        .map(|col| input.iter().map(|row| row[col]).sum())
+        .collect();
+    let grand_total: f64 = row_totals.iter().sum();
+    let expected: Vec<Vec<f64>> = input
+        .iter()
+        .enumerate()
+        .map(|(col_index, col)| {
+            col.iter()
+                .enumerate()
+                .map(|(row, _)| (row_totals[col_index] * column_totals[row]) / grand_total)
+                .collect()
+        })
+        .collect();
+    let chi2_statistic = chi2_contingency(&input, &expected);
+    let dof: usize = (input.len() - 1) * (input[0].len() - 1);
+    (chi2_statistic, dof)
+}
+
+fn chi2_contingency(input: &[Vec<f64>], expected: &[Vec<f64>]) -> f64 {
+    let mut chi2_statistic = 0.0;
+    for (i, row) in input.iter().enumerate() {
+        for (j, &input_value) in row.iter().enumerate() {
+            let expected_value = expected[i][j] as f64;
+            chi2_statistic += (input_value as f64 - expected_value).powi(2) / expected_value;
+        }
+    }
+    chi2_statistic
 }
 
 fn get_unique_array(input: Vec<f64>) -> Vec<f64> {
@@ -307,5 +361,6 @@ fn get_unique_array(input: Vec<f64>) -> Vec<f64> {
             output.push(val);
         }
     }
+    output.sort_by(|a, b| a.partial_cmp(b).unwrap());
     output
 } 
