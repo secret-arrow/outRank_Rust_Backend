@@ -1,4 +1,3 @@
-mod canisterlist;
 extern crate candid;
 use serde::Deserialize;
 use serde_json;
@@ -16,14 +15,15 @@ struct TraitType {
 fn main() {
     let (trait_object_array, trait_array) = fetch_canister_data("Ktlvk-giaaa-aaaap-aayja-cai".to_string());
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
-    let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value));
+    let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
     // let rarity_mat = rare_calc(traits_freq.clone());
     // let mut rarity_score = score_calc(rarity_mat);
     // let rarity_rank = rare_rank(rarity_score.clone());
     // rarity_score = add_max_min_minus_to_rarity_score(rarity_score); 
     // let trait_independence = trait_independence(traits_freq);
-    let trait_cramersV = trait_cramers_v(traits_freq);
-    println!("{:#?}", trait_cramersV);
+    // let trait_cramersV = trait_cramers_v(traits_freq);
+    let trait_normalize = trait_normalize(reverse_mat(traits_value.clone()), traits_count, traits_freq);
+    println!("{:#?}", trait_normalize);
 }
 
 fn fetch_canister_data(input: String) -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
@@ -142,17 +142,17 @@ fn reverse_mat(input: Vec<Vec<String>>) -> Vec<Vec<String>> {
     output
 }
 
-fn get_traits_count_freq_number(input: Vec<Vec<String>>) -> (Vec<Vec<i32>>, Vec<Vec<f64>>) {
-    let mut traits_count: Vec<Vec<i32>> = Vec::new();
+fn get_traits_count_freq_number(input: Vec<Vec<String>>) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
+    let mut traits_count: Vec<Vec<f64>> = Vec::new();
     let mut traits_freq: Vec<Vec<f64>> = Vec::new();
     let no_tokens:i32 = input[0].len() as i32;
     for col in input {
-        let mut count_col: Vec<i32> = Vec::new();
+        let mut count_col: Vec<f64> = Vec::new();
         let mut freq_col: Vec<f64> = Vec::new();
         let temp_col = col.clone();
         for value in temp_col {
             let tmp_col = col.clone();
-            let count:i32 = tmp_col.iter().filter(|&v| *v == value).count() as i32;
+            let count:f64 = tmp_col.iter().filter(|&v| *v == value).count() as f64;
             count_col.push(count.clone());
             freq_col.push(count.clone() as f64/no_tokens as f64);
         }
@@ -210,7 +210,7 @@ fn score_calc(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
 }
 
 fn wpmean(input: Vec<f64>, p: i32) -> f64 {
-    let mut output: f64 = 0.0 as f64;
+    let output: f64;
     let lenth: f64 = input.clone().len() as f64;
     if p==0 {
         let mut multi: f64 = 1.0 as f64;
@@ -294,7 +294,7 @@ fn trait_cramers_v(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
                     sum += item;
                 }
             }
-            let mut dimension = 0.0; 
+            let dimension: f64; 
             if key_set.len() > key_set[0].len() {
                 dimension = key_set[0].len() as f64 - 1.0;
             }
@@ -364,3 +364,104 @@ fn get_unique_array(input: Vec<f64>) -> Vec<f64> {
     output.sort_by(|a, b| a.partial_cmp(b).unwrap());
     output
 } 
+
+fn trait_normalize(traits_value: Vec<Vec<String>>, traits_count: Vec<Vec<f64>>, traits_freq: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
+    let mut w: Vec<i32> = Vec::new();
+    for col in traits_value.clone() {
+        let mut value_list: Vec<String> = Vec::new();
+        for val in col {
+            if !value_list.contains(&val) {
+                value_list.push(val);
+            }
+        }
+        w.push(value_list.len() as i32);
+    } 
+    let mut output: Vec<Vec<f64>> = Vec::new();
+    let style_list: Vec<String> = vec!["geometric".to_string(), "harmonic".to_string(), "arithmetic".to_string()];
+    let counts_control_list: Vec<bool> = vec![true, false];
+    for style in style_list {
+        for counts_control in counts_control_list.clone() {
+            let counts;
+            if counts_control == false {
+                counts = traits_count.clone();
+            }
+            else {
+                counts = traits_freq.clone();
+            }
+            let temp_nor:Vec<f64> = normalize_calc(w.clone(),counts,style.clone(),counts_control.clone());
+            let max = temp_nor.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+            let min = temp_nor.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+            let mut result: Vec<f64> = Vec::new(); 
+            for (_, item) in temp_nor.iter().enumerate() {
+                result.push(( item - min ) / (max - min));
+            }
+            output.push(result);
+        }
+    }
+    output
+}
+
+fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_control: bool) -> Vec<f64> {
+    let mut weights: Vec<Vec<f64>> = Vec::new();
+    let mut weight_sum: f64 = 0.0;
+    if style == "geometric" && counts_control == true {
+        for element in w {
+            let temp = element as f64;
+            weights.push(vec![temp.recip(); counts[0].len()]);
+            weight_sum += temp.recip();
+        }
+    }
+    else {
+        for element in w {
+            weights.push(vec![element as f64; counts[0].len()]);
+            weight_sum += element as f64;
+        }
+    }
+
+    let mut normalized_rarity: Vec<f64> = Vec::new();
+
+    if style == "geometric" {
+        if counts_control == false {
+            for row_index in 0..counts[0].len() {
+                let mut sum = 0.0;
+                for col_index in 0..counts.len() {
+                    sum += counts[col_index][row_index].ln()*weights[col_index][row_index];
+                }
+                sum = sum.powf(1.0/weight_sum);
+                normalized_rarity.push(f64::exp(sum)/counts.len() as f64);
+            }
+        }
+        else{
+            for row_index in 0..counts[0].len() {
+                let mut sum = 1.0;
+                for col_index in 0..counts.len() {
+                    sum *= counts[col_index][row_index].powf(weights[col_index][row_index]);
+                }
+                sum = sum.powf(1.0/weight_sum);
+                normalized_rarity.push(sum);
+            }
+        }
+    }
+    else if style == "harmonic" {
+        for row_index in 0..counts[0].len() {
+            let mut sum = 0.0;
+            for col_index in 0..counts.len() {
+                sum += counts[col_index][row_index] * weights[col_index][row_index];
+            }
+            sum = sum/weight_sum;
+            normalized_rarity.push(sum.powf(-1.0)*weight_sum);
+        }
+    }
+    else {
+        for row_index in 0..counts[0].len() {
+            let mut sum = 0.0;
+            for col_index in 0..counts.len() {
+                sum += counts[col_index][row_index] * weights[col_index][row_index];
+            }
+            sum = sum/weight_sum;
+            normalized_rarity.push(sum);
+        }
+    }
+
+    normalized_rarity
+}
