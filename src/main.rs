@@ -21,7 +21,8 @@ struct MyResponse {
     rarity_score: Vec<Vec<f64>>,
     trait_independence: Vec<Vec<f64>>,
     trait_cramers_v: Vec<Vec<f64>>,
-    trait_normalize: Vec<Vec<f64>>
+    trait_normalize: Vec<Vec<f64>>,
+    trait_array: Vec<String>
 }
 
 #[derive(Deserialize)]
@@ -42,13 +43,14 @@ async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder 
     let trait_independence = trait_independence(traits_freq.clone());
     let trait_cramers_v = trait_cramers_v(traits_freq.clone());
     let trait_normalize = trait_normalize(reverse_mat(traits_value.clone()), traits_count, traits_freq);
-    // println!("{:#?}", trait_normalize);
+    // println!("trait_normalize =======\n{:#?}", trait_normalize.clone());
     let response = MyResponse {
         rarity_rank: rarity_rank,
         rarity_score: rarity_score,
         trait_independence: trait_independence,
         trait_cramers_v: trait_cramers_v,
-        trait_normalize: trait_normalize
+        trait_normalize: trait_normalize,
+        trait_array: trait_array
     };
     HttpResponse::Ok().json(response)
 }
@@ -282,15 +284,10 @@ fn rare_rank(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
         ranks.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let mut rank_values: Vec<f64> = Vec::new();
-        let mut current_rank = 1.0;
-        let mut prev_value = ranks[0];
 
-        for value in ranks {
-            if value != prev_value {
-                current_rank += 1.0;
-            }
-            rank_values.push(current_rank);
-            prev_value = value;
+        for value in col {
+            let rank = ranks.iter().position(|&x| x == value).unwrap() as f64;
+            rank_values.push(rank);
         }
 
         output.push(rank_values);
@@ -447,6 +444,7 @@ fn trait_normalize(traits_value: Vec<Vec<String>>, traits_count: Vec<Vec<f64>>, 
 }
 
 fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_control: bool) -> Vec<f64> {
+    // println!("counts ====\n{:#?}", counts);
     let mut weights: Vec<Vec<f64>> = Vec::new();
     let mut weight_sum: f64 = 0.0;
     if style == "geometric" && counts_control == true {
