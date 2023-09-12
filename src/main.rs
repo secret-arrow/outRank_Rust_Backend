@@ -5,6 +5,9 @@ use serde_json::to_string_pretty;
 use std::process::Command;
 use statrs::distribution::ChiSquared;
 use statrs::distribution::ContinuousCDF;
+use actix_cors::Cors;
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use serde::Serialize;
 
 #[derive(Debug, Deserialize)]
 struct TraitType {
@@ -12,18 +15,60 @@ struct TraitType {
     value: String,
 }
 
-fn main() {
-    let (trait_object_array, trait_array) = fetch_canister_data("Ktlvk-giaaa-aaaap-aayja-cai".to_string());
+#[derive(Serialize)]
+struct MyResponse {
+    rarity_rank: Vec<Vec<f64>>,
+    rarity_score: Vec<Vec<f64>>,
+    trait_independence: Vec<Vec<f64>>,
+    trait_cramers_v: Vec<Vec<f64>>,
+    trait_normalize: Vec<Vec<f64>>
+}
+
+#[derive(Deserialize)]
+struct MyQueryParams {
+    canister_id: String
+}
+
+#[get("/get_canister_data")]
+async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder {
+    let canister_id = &query_params.canister_id;
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
-    // let rarity_mat = rare_calc(traits_freq.clone());
-    // let mut rarity_score = score_calc(rarity_mat);
-    // let rarity_rank = rare_rank(rarity_score.clone());
-    // rarity_score = add_max_min_minus_to_rarity_score(rarity_score); 
-    // let trait_independence = trait_independence(traits_freq);
-    // let trait_cramersV = trait_cramers_v(traits_freq);
+    let rarity_mat = rare_calc(traits_freq.clone());
+    let mut rarity_score = score_calc(rarity_mat);
+    let rarity_rank = rare_rank(rarity_score.clone());
+    rarity_score = add_max_min_minus_to_rarity_score(rarity_score); 
+    let trait_independence = trait_independence(traits_freq.clone());
+    let trait_cramers_v = trait_cramers_v(traits_freq.clone());
     let trait_normalize = trait_normalize(reverse_mat(traits_value.clone()), traits_count, traits_freq);
-    println!("{:#?}", trait_normalize);
+    // println!("{:#?}", trait_normalize);
+    let response = MyResponse {
+        rarity_rank: rarity_rank,
+        rarity_score: rarity_score,
+        trait_independence: trait_independence,
+        trait_cramers_v: trait_cramers_v,
+        trait_normalize: trait_normalize
+    };
+    HttpResponse::Ok().json(response)
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new()
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["GET", "POST"])
+                    .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+                    .max_age(3600),
+            )
+            .service(my_endpoint)
+    })
+    .bind("127.0.0.1:8000")?
+    .run()
+    .await
 }
 
 fn fetch_canister_data(input: String) -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
