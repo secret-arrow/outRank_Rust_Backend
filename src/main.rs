@@ -555,7 +555,7 @@ fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_cont
         for row_index in 0..counts[0].len() {
             let mut sum = 0.0;
             for col_index in 0..counts.len() {
-                sum += counts[col_index][row_index] / weights[col_index][row_index];
+                sum += weights[col_index][row_index] / counts[col_index][row_index];
             }
             sum = sum/weight_sum;
             normalized_rarity.push(sum.powf(-1.0)*weight_sum);
