@@ -8,6 +8,7 @@ use statrs::distribution::ContinuousCDF;
 use actix_cors::Cors;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use serde::Serialize;
+use std::fs;
 
 #[derive(Debug, Deserialize)]
 struct TraitType {
@@ -33,17 +34,27 @@ struct MyQueryParams {
 #[get("/get_canister_data")]
 async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder {
     let canister_id = &query_params.canister_id;
-    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    // let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    let (trait_object_array, trait_array) = fetch_test_data();
+    println!("fetch data");
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
+    println!("traits_value");
     let (traits_count, traits_freq) = get_traits_count_freq_number(reverse_mat(traits_value.clone()));
+    println!("traits_count_freq");
     let rarity_mat = rare_calc(traits_freq.clone());
+    println!("rarity_mat");
     let mut rarity_score = score_calc(rarity_mat);
+    println!("rarity_score");
     let rarity_rank = rare_rank(rarity_score.clone());
+    println!("rarity_rank");
     rarity_score = add_max_min_minus_to_rarity_score(rarity_score); 
+    println!("rarity_score_new");
     let trait_independence = trait_independence(traits_freq.clone());
+    println!("trait_independence");
     let trait_cramers_v = trait_cramers_v(traits_freq.clone());
+    println!("trait_cramers_v");
     let trait_normalize = trait_normalize(reverse_mat(traits_value.clone()), traits_count, traits_freq);
-    // println!("trait_normalize =======\n{:#?}", trait_normalize.clone());
+    println!("trait_normalize");
     let response = MyResponse {
         rarity_rank: rarity_rank,
         rarity_score: rarity_score,
@@ -57,6 +68,7 @@ async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder 
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+
     HttpServer::new(|| {
         App::new()
             .wrap(
@@ -71,6 +83,61 @@ async fn main() -> std::io::Result<()> {
     .bind("127.0.0.1:8000")?
     .run()
     .await
+}
+
+fn fetch_test_data() -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
+    let mut trait_object_array: Vec<std::collections::HashMap<String, String>> = Vec::new();
+    let mut trait_array: Vec<String> = Vec::new();
+
+    let test_data_string = fs::read_to_string("testdata.txt").unwrap();
+
+    let string_data = test_data_string.replace("\"", "");
+    let mut data = string_data.as_str();
+
+    while 1 == 1 {
+        let start = data.find("{").unwrap_or(0);
+
+        if start == 0 {
+            break;
+        }
+
+        (_, data) = data.split_at(start+1);
+        let end = data.find("}").unwrap_or(0);
+        
+        let mut res;
+        (res, data) = data.split_at(end);
+
+        let mut my_object = std::collections::HashMap::new();
+
+        while 1 == 1 {
+            let key_val;
+            let spos = res.find(",").unwrap_or(0);
+
+            if spos == 0 {
+                key_val = res;
+            }
+            else{
+                (key_val, _) = res.split_at(spos);
+                (_, res) = res.split_at(spos+1);
+            }
+            let mpos = key_val.find(":").unwrap_or(0);
+            let (key, _) = key_val.split_at(mpos);
+            let (_, val) = key_val.split_at(mpos+1);
+
+            my_object.insert(key.to_string(), val.to_string());
+
+            if !trait_array.contains(&key.to_string()) {
+                trait_array.push(key.to_string());
+            }
+
+            if spos == 0 {
+                break;
+            }
+        }
+        trait_object_array.push(my_object);
+    }
+
+    (trait_object_array, trait_array)
 }
 
 fn fetch_canister_data(input: String) -> (Vec<std::collections::HashMap<String, String>> , Vec<String>) {
@@ -444,7 +511,6 @@ fn trait_normalize(traits_value: Vec<Vec<String>>, traits_count: Vec<Vec<f64>>, 
 }
 
 fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_control: bool) -> Vec<f64> {
-    // println!("counts ====\n{:#?}", counts);
     let mut weights: Vec<Vec<f64>> = Vec::new();
     let mut weight_sum: f64 = 0.0;
     if style == "geometric" && counts_control == true {
@@ -489,7 +555,7 @@ fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_cont
         for row_index in 0..counts[0].len() {
             let mut sum = 0.0;
             for col_index in 0..counts.len() {
-                sum += counts[col_index][row_index] * weights[col_index][row_index];
+                sum += counts[col_index][row_index] / weights[col_index][row_index];
             }
             sum = sum/weight_sum;
             normalized_rarity.push(sum.powf(-1.0)*weight_sum);
