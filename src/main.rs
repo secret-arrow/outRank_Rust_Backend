@@ -34,8 +34,8 @@ struct MyQueryParams {
 #[get("/get_canister_data")]
 async fn my_endpoint(query_params: web::Query<MyQueryParams>) -> impl Responder {
     let canister_id = &query_params.canister_id;
-    // let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
-    let (trait_object_array, trait_array) = fetch_test_data();
+    let (trait_object_array, trait_array) = fetch_canister_data(canister_id.to_owned());
+    // let (trait_object_array, trait_array) = fetch_test_data();
     println!("fetch data");
     let traits_value = canister_data_to_traits_value(trait_object_array,trait_array.clone());
     println!("traits_value");
@@ -297,9 +297,9 @@ fn rare_calc(input: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
     }
     output.push(min_col);
     output.push(max_col);
-    output.push(arithmetic_col);
     output.push(harmonic_col);
     output.push(geometric_col);
+    output.push(arithmetic_col);
     output
 }
 
@@ -486,7 +486,7 @@ fn trait_normalize(traits_value: Vec<Vec<String>>, traits_count: Vec<Vec<f64>>, 
         w.push(value_list.len() as i32);
     } 
     let mut output: Vec<Vec<f64>> = Vec::new();
-    let style_list: Vec<String> = vec!["geometric".to_string(), "harmonic".to_string(), "arithmetic".to_string()];
+    let style_list: Vec<String> = vec!["harmonic".to_string(), "geometric".to_string(), "arithmetic".to_string()];
     let counts_control_list: Vec<bool> = vec![true, false];
     for style in style_list {
         for counts_control in counts_control_list.clone() {
@@ -516,8 +516,8 @@ fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_cont
     if style == "geometric" && counts_control == true {
         for element in w {
             let temp = element as f64;
-            weights.push(vec![temp.recip(); counts[0].len()]);
-            weight_sum += temp.recip();
+            weights.push(vec![1.0/temp; counts[0].len()]);
+            weight_sum += 1.0/temp;
         }
     }
     else {
@@ -536,7 +536,8 @@ fn normalize_calc(w: Vec<i32>, counts: Vec<Vec<f64>>, style: String, counts_cont
                 for col_index in 0..counts.len() {
                     sum += counts[col_index][row_index].ln()*weights[col_index][row_index];
                 }
-                sum = sum.powf(1.0/weight_sum);
+                // sum = sum.powf(1.0/weight_sum);
+                sum = sum/weight_sum;
                 normalized_rarity.push(f64::exp(sum)/counts.len() as f64);
             }
         }
